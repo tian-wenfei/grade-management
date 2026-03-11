@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>宝鸡市凤翔区西街中学学生成绩管理系统</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .admin-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .admin-tab-btn { padding: 12px 20px; border: none; background: #f0f0f0; cursor: pointer; border-radius: 8px; font-size: 14px; font-weight: 500; transition: all 0.3s; }
+        .admin-tab-btn:hover { background: #e0e0e0; }
+        .admin-tab-btn.active { background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3); }
+        .admin-content { display: none; }
+        .admin-content.active { display: block; }
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; border-radius: 8px; overflow: hidden; }
+        .data-table th, .data-table td { border: 1px solid #eee; padding: 12px; text-align: left; }
+        .data-table th { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); font-weight: 600; }
+        .data-table tr:hover { background: #f8f9f9; }
+        .action-btn { padding: 8px 14px; margin: 2px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.3s; }
+        .delete-btn { background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); color: white; }
+        .delete-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4); }
+        .refresh-btn { background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%); color: white; margin-bottom: 15px; }
+        .refresh-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4); }
+        .add-user-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 15px; background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-radius: 8px; margin-bottom: 15px; }
+        .add-user-form h4 { width: 100%; margin: 0 0 10px 0; color: #2e7d32; font-size: 15px; }
+        .settings-section { padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+        .settings-section h4 { width: 100%; margin: 0 0 15px 0; color: #333; font-size: 15px; border-bottom: 2px solid #4CAF50; padding-bottom: 8px; }
+        .admin-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; animation: fadeIn 0.3s ease; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="admin-entry">
+            <button class="admin-btn" onclick="toggleAdminPanel()">管理员入口</button>
+            <div id="admin-panel" class="admin-panel" style="display: none;">
+                <div class="login-card">
+                    <div class="login-left">
+                        <div class="login-title">用户管理</div>
+                    </div>
+                    <div class="login-right">
+                        <div id="login-form">
+                            <input type="text" id="username" placeholder="请输入用户名">
+                            <input type="password" id="password" placeholder="请输入密码">
+                            <button onclick="userLogin()">登录</button>
+                        </div>
+                        
+                        <div id="authStatus"></div>
+                    </div>
+                </div>
+                
+                <div id="upload-section" class="upload-section" style="display: none;">
+                    <div class="user-info-bar">
+                        <span>当前用户：<span id="currentUser"></span></span>
+                        <button class="logout-btn" onclick="userLogout()">退出登录</button>
+                    </div>
+                    <div class="admin-tabs">
+                        <button class="admin-tab-btn active" onclick="switchAdminTab('upload')">上传成绩</button>
+                        <button class="admin-tab-btn" onclick="switchAdminTab('users')" id="manageUsersBtn" style="display:none;">用户管理</button>
+                        <button class="admin-tab-btn" onclick="switchAdminTab('exams')" id="manageExamsBtn" style="display:none;">考试管理</button>
+                        <button class="admin-tab-btn" onclick="switchAdminTab('settings')">账户设置</button>
+                    </div>
+                    
+                    <div id="admin-upload" class="admin-content active">
+                        <input type="file" id="excelFile" accept=".xlsx,.xls">
+                        <button onclick="uploadExcel()">上传并发布成绩</button>
+                        <div id="uploadStatus"></div>
+                    </div>
+                    
+                    <div id="admin-users" class="admin-content">
+                        <div class="add-user-form">
+                            <h4>添加新用户</h4>
+                            <input type="text" id="newUsername" placeholder="请输入用户名" style="width: 150px;">
+                            <input type="password" id="newPassword" placeholder="请输入密码" style="width: 150px;">
+                            <select id="newUserRole" style="width: 100px; padding: 14px 16px; border: 2px solid #e8e8e8; border-radius: 8px; font-size: 14px;">
+                                <option value="user">普通用户</option>
+                                <option value="admin">管理员</option>
+                            </select>
+                            <button onclick="createUser()" style="width: auto; padding: 14px 20px;">添加用户</button>
+                        </div>
+                        <button class="action-btn refresh-btn" onclick="loadUsers()">刷新用户列表</button>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>用户名</th>
+                                    <th>角色</th>
+                                    <th>创建时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody"></tbody>
+                        </table>
+                    </div>
+                    
+                    <div id="admin-exams" class="admin-content">
+                        <button class="action-btn refresh-btn" onclick="loadExams()">刷新考试列表</button>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>考试名称</th>
+                                    <th>上传者</th>
+                                    <th>创建时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="examsTableBody"></tbody>
+                        </table>
+                    </div>
+                    
+                    <div id="admin-settings" class="admin-content">
+                        <div class="settings-section">
+                            <h4>修改用户名</h4>
+                            <input type="text" id="newUsernameInput" placeholder="请输入新用户名" style="width: 200px;">
+                            <input type="password" id="usernamePassword" placeholder="请输入密码确认" style="width: 200px;">
+                            <button onclick="changeUsername()" style="width: auto; padding: 14px 20px;">修改用户名</button>
+                        </div>
+                        <div class="settings-section">
+                            <h4>修改密码</h4>
+                            <input type="password" id="changeOldPassword" placeholder="请输入旧密码" style="width: 200px;">
+                            <input type="password" id="changeNewPassword" placeholder="请输入新密码" style="width: 200px;">
+                            <input type="password" id="changeConfirmPassword" placeholder="请确认新密码" style="width: 200px;">
+                            <button onclick="changePassword()" style="width: auto; padding: 14px 20px;">修改密码</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <h1><span class="school-name">宝鸡市凤翔区西街中学</span><span class="system-name">学生成绩管理系统</span></h1>
+        
+        <div id="student" class="section active">
+            <h2>学生成绩查询</h2>
+            <div class="query-section">
+                <input type="text" id="studentName" placeholder="请输入姓名">
+                <input type="text" id="studentId" placeholder="请输入学号">
+                <button onclick="queryGrade()">查询成绩</button>
+                <div id="gradeResult"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
