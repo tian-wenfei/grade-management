@@ -74,7 +74,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 app.use((req, res, next) => {
-    if (req.path.startsWith('/api/health') || req.path.match(/\.(css|js|png|jpg|ico)$/)) {
+    if (req.path.startsWith('/api/health') || req.path === '/' || req.path.match(/\.(css|js|png|jpg|ico|html)$/)) {
         return next();
     }
     rateLimiter(req, res, next);
