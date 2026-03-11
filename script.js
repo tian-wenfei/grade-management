@@ -297,6 +297,12 @@ function switchAdminTab(tab) {
     }
 }
 
+let allUsers = [];
+let allExams = [];
+let currentUserPage = 1;
+let currentExamPage = 1;
+const pageSize = 10;
+
 async function loadUsers() {
     const token = localStorage.getItem('token');
     if (!token) return;
@@ -309,32 +315,126 @@ async function loadUsers() {
         });
         
         if (response.ok) {
-            const users = await response.json();
-            const tbody = document.getElementById('usersTableBody');
-            tbody.innerHTML = '';
-            
-            users.forEach(user => {
-                const roleMap = {
-                    'superadmin': '超级管理员',
-                    'admin': '管理员',
-                    'user': '普通用户'
-                };
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${user.id}</td>
-                    <td>${user.username}</td>
-                    <td>${roleMap[user.role] || user.role}</td>
-                    <td>${new Date(user.createdAt).toLocaleString('zh-CN')}</td>
-                    <td>
-                        <button class="action-btn delete-btn" onclick="deleteUser(${user.id})">删除</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+            allUsers = await response.json();
+            currentUserPage = 1;
+            renderUsers();
         }
     } catch (error) {
         console.error('加载用户失败:', error);
     }
+}
+
+function searchUsers() {
+    currentUserPage = 1;
+    renderUsers();
+}
+
+function renderUsers() {
+    const searchValue = document.getElementById('userSearchInput')?.value?.toLowerCase() || '';
+    const filteredUsers = allUsers.filter(user => 
+        user.username.toLowerCase().includes(searchValue)
+    );
+    
+    const totalPages = Math.ceil(filteredUsers.length / pageSize);
+    const startIndex = (currentUserPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const pageUsers = filteredUsers.slice(startIndex, endIndex);
+    
+    const tbody = document.getElementById('usersTableBody');
+    tbody.innerHTML = '';
+    
+    if (pageUsers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:30px;">暂无数据</td></tr>';
+    } else {
+        pageUsers.forEach(user => {
+            const roleMap = {
+                'superadmin': '超级管理员',
+                'admin': '管理员',
+                'user': '普通用户'
+            };
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${user.id}</td>
+                <td>${user.username}</td>
+                <td>${roleMap[user.role] || user.role}</td>
+                <td>${new Date(user.createdAt).toLocaleString('zh-CN')}</td>
+                <td>
+                    <button class="action-btn delete-btn" onclick="deleteUser(${user.id})">删除</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+    
+    renderPagination('usersPagination', totalPages, currentUserPage, (page) => {
+        currentUserPage = page;
+        renderUsers();
+    });
+}
+
+function renderPagination(containerId, totalPages, currentPage, onPageChange) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (totalPages <= 1) return;
+    
+    const prevBtn = document.createElement('button');
+    prevBtn.textContent = '上一页';
+    prevBtn.disabled = currentPage === 1;
+    prevBtn.onclick = () => onPageChange(currentPage - 1);
+    container.appendChild(prevBtn);
+    
+    const maxVisible = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    
+    if (endPage - startPage < maxVisible - 1) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    
+    if (startPage > 1) {
+        const firstBtn = document.createElement('button');
+        firstBtn.textContent = '1';
+        firstBtn.onclick = () => onPageChange(1);
+        container.appendChild(firstBtn);
+        
+        if (startPage > 2) {
+            const dots = document.createElement('span');
+            dots.textContent = '...';
+            dots.style.padding = '8px';
+            container.appendChild(dots);
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        btn.className = i === currentPage ? 'active' : '';
+        btn.onclick = () => onPageChange(i);
+        container.appendChild(btn);
+    }
+    
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            const dots = document.createElement('span');
+            dots.textContent = '...';
+            dots.style.padding = '8px';
+            container.appendChild(dots);
+        }
+        
+        const lastBtn = document.createElement('button');
+        lastBtn.textContent = totalPages;
+        lastBtn.onclick = () => onPageChange(totalPages);
+        container.appendChild(lastBtn);
+    }
+    
+    const nextBtn = document.createElement('button');
+    nextBtn.textContent = '下一页';
+    nextBtn.disabled = currentPage === totalPages;
+    nextBtn.onclick = () => onPageChange(currentPage + 1);
+    container.appendChild(nextBtn);
 }
 
 async function deleteUser(userId) {
@@ -374,27 +474,57 @@ async function loadExams() {
         });
         
         if (response.ok) {
-            const exams = await response.json();
-            const tbody = document.getElementById('examsTableBody');
-            tbody.innerHTML = '';
-            
-            exams.forEach(exam => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${exam.id}</td>
-                    <td>${exam.examName}</td>
-                    <td>${exam.uploader}</td>
-                    <td>${new Date(exam.createdAt).toLocaleString('zh-CN')}</td>
-                    <td>
-                        <button class="action-btn delete-btn" onclick="deleteExam(${exam.id})">删除</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+            allExams = await response.json();
+            currentExamPage = 1;
+            renderExams();
         }
     } catch (error) {
         console.error('加载考试失败:', error);
     }
+}
+
+function searchExams() {
+    currentExamPage = 1;
+    renderExams();
+}
+
+function renderExams() {
+    const searchValue = document.getElementById('examSearchInput')?.value?.toLowerCase() || '';
+    const filteredExams = allExams.filter(exam => 
+        exam.examName.toLowerCase().includes(searchValue) ||
+        exam.uploader.toLowerCase().includes(searchValue)
+    );
+    
+    const totalPages = Math.ceil(filteredExams.length / pageSize);
+    const startIndex = (currentExamPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const pageExams = filteredExams.slice(startIndex, endIndex);
+    
+    const tbody = document.getElementById('examsTableBody');
+    tbody.innerHTML = '';
+    
+    if (pageExams.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:30px;">暂无数据</td></tr>';
+    } else {
+        pageExams.forEach(exam => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${exam.id}</td>
+                <td>${exam.examName}</td>
+                <td>${exam.uploader}</td>
+                <td>${new Date(exam.createdAt).toLocaleString('zh-CN')}</td>
+                <td>
+                    <button class="action-btn delete-btn" onclick="deleteExam(${exam.id})">删除</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+    
+    renderPagination('examsPagination', totalPages, currentExamPage, (page) => {
+        currentExamPage = page;
+        renderExams();
+    });
 }
 
 async function deleteExam(examId) {
