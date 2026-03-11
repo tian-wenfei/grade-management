@@ -63,9 +63,7 @@ body {
     padding: 0;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(76, 175, 80, 0.1);
     z-index: 1000;
-    width: 90%;
-    max-width: 480px;
-    min-width: 320px;
+    min-width: 480px;
     animation: scaleIn 0.3s ease;
     overflow: hidden;
 }
@@ -88,69 +86,6 @@ body {
     padding: 30px 20px;
     position: relative;
     overflow: hidden;
-}
-
-@media (max-width: 480px) {
-    .admin-panel {
-        width: 95%;
-        min-width: 280px;
-    }
-    
-    .login-card {
-        flex-direction: column;
-    }
-    
-    .login-left {
-        width: 100%;
-        height: 100px;
-        padding: 20px;
-    }
-    
-    .login-title {
-        writing-mode: horizontal-tb;
-        text-orientation: mixed;
-        letter-spacing: 4px;
-        font-size: 18px;
-    }
-    
-    .login-right {
-        padding: 20px;
-    }
-    
-    .admin-tabs {
-        flex-direction: column;
-        gap: 5px;
-    }
-    
-    .admin-tab-btn {
-        padding: 10px;
-    }
-    
-    .add-user-form,
-    .settings-section {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .add-user-form input,
-    .settings-section input,
-    .add-user-form select {
-        width: 100% !important;
-    }
-    
-    .data-table {
-        font-size: 12px;
-    }
-    
-    .data-table th,
-    .data-table td {
-        padding: 8px;
-    }
-    
-    .action-btn {
-        padding: 6px 10px;
-        font-size: 12px;
-    }
 }
 
 .login-left::before {
@@ -496,27 +431,140 @@ tr:hover {
 /* 响应式设计 */
 @media (max-width: 768px) {
     .container {
-        margin: 20px;
-        padding: 20px;
+        margin: 10px;
+        padding: 15px;
     }
     
     h1 {
-        font-size: 24px;
+        font-size: 20px;
+        flex-direction: column;
+        gap: 5px;
     }
     
     h2 {
-        font-size: 20px;
-    }
-    
-    .admin-panel {
-        position: static;
-        margin-top: 20px;
-        min-width: 100%;
+        font-size: 18px;
     }
     
     .admin-entry {
-        position: static;
-        margin-bottom: 20px;
-        text-align: right;
+        position: relative;
+        top: auto;
+        right: auto;
+        margin-bottom: 15px;
+        text-align: center;
+    }
+    
+    .admin-btn {
+        padding: 10px 20px;
+        font-size: 13px;
+    }
+    
+    .admin-panel {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        min-width: auto;
+        width: 95%;
+        max-width: 95%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    
+    .login-card {
+        flex-direction: column;
+    }
+    
+    .login-left {
+        width: 100%;
+        padding: 20px;
+    }
+    
+    .login-title {
+        writing-mode: horizontal-tb;
+        text-orientation: mixed;
+        letter-spacing: 3px;
+    }
+    
+    .login-right {
+        padding: 20px;
+    }
+    
+    .auth-tabs {
+        flex-direction: row;
+    }
+    
+    .auth-tab {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+    
+    .login-right input[type="text"],
+    .login-right input[type="password"] {
+        padding: 12px 14px;
+        font-size: 13px;
+    }
+    
+    .login-right button {
+        padding: 12px 0;
+        font-size: 14px;
+    }
+    
+    .admin-tabs {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .admin-tab-btn {
+        padding: 10px 14px;
+        font-size: 13px;
+        flex: 1;
+        min-width: calc(50% - 8px);
+    }
+    
+    .user-info-bar {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+    
+    .logout-btn {
+        width: 100%;
+    }
+    
+    .data-table {
+        font-size: 12px;
+    }
+    
+    .data-table th,
+    .data-table td {
+        padding: 8px 6px;
+    }
+    
+    .add-user-form {
+        flex-direction: column;
+    }
+    
+    .add-user-form input,
+    .add-user-form select,
+    .add-user-form button {
+        width: 100% !important;
+    }
+    
+    .settings-section {
+        flex-direction: column;
+    }
+    
+    .settings-section input,
+    .settings-section button {
+        width: 100% !important;
+    }
+    
+    .query-section input {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    
+    .query-section button {
+        width: 100%;
     }
 }
