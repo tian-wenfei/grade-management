@@ -1,5 +1,85 @@
 const API_BASE = window.location.origin + '/api';
 
+function showBusyMessage(data) {
+    let overlay = document.getElementById('busy-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'busy-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        `;
+        document.body.appendChild(overlay);
+    }
+    
+    overlay.innerHTML = `
+        <div style="
+            background: white;
+            padding: 40px 60px;
+            border-radius: 16px;
+            text-align: center;
+            max-width: 400px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        ">
+            <div style="font-size: 48px; margin-bottom: 20px;">⏳</div>
+            <h3 style="color: #333; margin-bottom: 15px;">${data.error || '当前访问人数较多'}</h3>
+            <p style="color: #666; margin-bottom: 20px;">
+                当前在线: ${data.currentUsers || '?'}/${data.maxUsers || '?'} 人
+            </p>
+            <p style="color: #999; font-size: 14px;">
+                请稍后再试，感谢您的理解
+            </p>
+            <button onclick="document.getElementById('busy-overlay').remove()" style="
+                margin-top: 20px;
+                padding: 12px 30px;
+                background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 14px;
+            ">确定</button>
+        </div>
+    `;
+    overlay.style.display = 'flex';
+}
+
+async function fetchWithLimit(url, options = {}) {
+    try {
+        const response = await fetch(url, options);
+        
+        if (response.status === 429) {
+            const data = await response.json();
+            showBusyMessage({
+                error: data.error || '请求过于频繁',
+                retryAfter: data.retryAfter
+            });
+            throw new Error('RATE_LIMIT');
+        }
+        
+        if (response.status === 503) {
+            const data = await response.json();
+            showBusyMessage(data);
+            throw new Error('SERVER_BUSY');
+        }
+        
+        return response;
+    } catch (error) {
+        if (error.message === 'RATE_LIMIT' || error.message === 'SERVER_BUSY') {
+            throw error;
+        }
+        throw error;
+    }
+}
+
 function toggleAdminPanel() {
     const adminPanel = document.getElementById('admin-panel');
     let overlay = document.getElementById('admin-overlay');
@@ -44,7 +124,7 @@ async function checkUserLoginStatus() {
     
     if (token && username) {
         try {
-            const response = await fetch(`${API_BASE}/user`, {
+            const response = await fetchWithLimit(`${API_BASE}/user`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -140,7 +220,7 @@ async function userLogin() {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/login`, {
+        const response = await fetchWithLimit(`${API_BASE}/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -560,7 +640,7 @@ async function uploadExcel() {
                 return;
             }
             
-            const response = await fetch(`${API_BASE}/upload`, {
+            const response = await fetchWithLimit(`${API_BASE}/upload`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -629,7 +709,7 @@ async function queryGrade() {
     }
     
     try {
-        const response = await fetch(
+        const response = await fetchWithLimit(
             `${API_BASE}/grades?studentName=${encodeURIComponent(studentName)}&studentId=${encodeURIComponent(studentId)}`
         );
         
