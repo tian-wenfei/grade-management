@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const { Sequelize, DataTypes } = require('sequelize');
 const compression = require('compression');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -10,13 +11,25 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 
 const MAX_CONCURRENT_REQUESTS = parseInt(process.env.MAX_CONCURRENT) || 100;
 const MAX_REQUESTS_PER_MINUTE = parseInt(process.env.MAX_REQUESTS_PER_MINUTE) || 60;
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCK_TIME = 15 * 60 * 1000;
 
 let activeRequests = 0;
 const requestCounts = new Map();
 const requestQueue = [];
+const loginAttempts = new Map();
 
 setInterval(() => {
     requestCounts.clear();
+}, 60000);
+
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, value] of loginAttempts.entries()) {
+        if (value.lockUntil && value.lockUntil < now) {
+            loginAttempts.delete(key);
+        }
+    }
 }, 60000);
 
 const rateLimiter = (req, res, next) => {
@@ -176,7 +189,7 @@ function generateToken(user) {
     return jwt.sign(
         { id: user.id, username: user.username, role: user.role },
         SECRET_KEY,
-        { expiresIn: '24h' }
+        { expiresIn: '2h' }
     );
 }
 
@@ -233,10 +246,40 @@ app.post('/api/login', async (req, res) => {
             return res.status(400).json({ error: '请输入用户名和密码' });
         }
         
-        const user = await User.findOne({ where: { username, password } });
+        const attempts = loginAttempts.get(username);
+        if (attempts && attempts.lockUntil && attempts.lockUntil > Date.now()) {
+            const remainingTime = Math.ceil((attempts.lockUntil - Date.now()) / 1000 / 60);
+            return res.status(429).json({ 
+                error: `账户已锁定，请${remainingTime}分钟后再试` 
+            });
+        }
+        
+        const user = await User.findOne({ where: { username } });
         if (!user) {
+            const currentAttempts = loginAttempts.get(username) || { count: 0 };
+            currentAttempts.count++;
+            if (currentAttempts.count >= MAX_LOGIN_ATTEMPTS) {
+                currentAttempts.lockUntil = Date.now() + LOCK_TIME;
+            }
+            loginAttempts.set(username, currentAttempts);
             return res.status(401).json({ error: '用户名或密码错误' });
         }
+        
+        const isValidPassword = user.password.startsWith('$2a$') || user.password.startsWith('$2b$')
+            ? await bcrypt.compare(password, user.password)
+            : password === user.password;
+        
+        if (!isValidPassword) {
+            const currentAttempts = loginAttempts.get(username) || { count: 0 };
+            currentAttempts.count++;
+            if (currentAttempts.count >= MAX_LOGIN_ATTEMPTS) {
+                currentAttempts.lockUntil = Date.now() + LOCK_TIME;
+            }
+            loginAttempts.set(username, currentAttempts);
+            return res.status(401).json({ error: '用户名或密码错误' });
+        }
+        
+        loginAttempts.delete(username);
         
         const token = generateToken(user);
         
@@ -262,6 +305,10 @@ app.post('/api/admin/users', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: '请提供用户名和密码' });
         }
         
+        if (password.length < 6) {
+            return res.status(400).json({ error: '密码至少需要6个字符' });
+        }
+        
         const existingUser = await User.findOne({ where: { username } });
         if (existingUser) {
             return res.status(400).json({ error: '用户名已存在' });
@@ -275,9 +322,11 @@ app.post('/api/admin/users', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: '管理员只能创建普通用户' });
         }
         
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
         const user = await User.create({
             username,
-            password,
+            password: hashedPassword,
             role: role || 'user',
             createdBy: req.user.id
         });
@@ -304,16 +353,25 @@ app.put('/api/user/password', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: '请提供旧密码和新密码' });
         }
         
+        if (newPassword.length < 6) {
+            return res.status(400).json({ error: '新密码至少需要6个字符' });
+        }
+        
         const user = await User.findByPk(userId);
         if (!user) {
             return res.status(404).json({ error: '用户不存在' });
         }
         
-        if (user.password !== oldPassword) {
+        const isValidPassword = user.password.startsWith('$2a$') || user.password.startsWith('$2b$')
+            ? await bcrypt.compare(oldPassword, user.password)
+            : oldPassword === user.password;
+        
+        if (!isValidPassword) {
             return res.status(400).json({ error: '旧密码错误' });
         }
         
-        await user.update({ password: newPassword });
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await user.update({ password: hashedPassword });
         
         res.json({ message: '密码修改成功' });
     } catch (error) {
@@ -335,7 +393,11 @@ app.put('/api/user/username', authenticateToken, async (req, res) => {
             return res.status(404).json({ error: '用户不存在' });
         }
         
-        if (user.password !== password) {
+        const isValidPassword = user.password.startsWith('$2a$') || user.password.startsWith('$2b$')
+            ? await bcrypt.compare(password, user.password)
+            : password === user.password;
+        
+        if (!isValidPassword) {
             return res.status(400).json({ error: '密码错误' });
         }
         
@@ -649,9 +711,10 @@ async function initDatabase() {
         
         const superAdmin = await User.findOne({ where: { username: '西街中学' } });
         if (!superAdmin) {
+            const hashedPassword = await bcrypt.hash('xjzx2026', 10);
             await User.create({
                 username: '西街中学',
-                password: 'xjzx2026',
+                password: hashedPassword,
                 role: 'superadmin',
                 createdBy: null
             });
@@ -660,9 +723,10 @@ async function initDatabase() {
         
         const adminUser = await User.findOne({ where: { username: 'admin' } });
         if (!adminUser) {
+            const hashedPassword = await bcrypt.hash('123456', 10);
             await User.create({
                 username: 'admin',
-                password: '123456',
+                password: hashedPassword,
                 role: 'admin',
                 createdBy: null
             });
