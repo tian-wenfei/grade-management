@@ -434,178 +434,60 @@ async function uploadExcel() {
     const uploadStatus = document.getElementById('uploadStatus');
     
     if (!file) {
-        uploadStatus.innerHTML = '<div class="error">请选择Excel文件</div>';
+        showMessage(uploadStatus, '请选择Excel文件', false);
         return;
     }
     
     if (!file.name.match(/\.(xlsx|xls)$/)) {
-        uploadStatus.innerHTML = '<div class="error">请选择Excel文件(.xlsx或.xls)</div>';
+        showMessage(uploadStatus, '请选择Excel文件(.xlsx或.xls)', false);
         return;
     }
     
-    const originalFilename = file.name;
-    const examName = originalFilename.substring(0, originalFilename.lastIndexOf('.'));
+    const formData = new FormData();
+    formData.append('excelFile', file);
     
-    const reader = new FileReader();
-    reader.onload = async function(e) {
-        try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            
-            const range = XLSX.utils.decode_range(worksheet['!ref']);
-            let nameRowIndex = -1;
-            
-            for (let r = range.s.r; r <= range.e.r; r++) {
-                for (let c = range.s.c; c <= range.e.c; c++) {
-                    const cellAddress = XLSX.utils.encode_cell({r, c});
-                    const cell = worksheet[cellAddress];
-                    if (cell && (cell.v === '姓名' || cell.v === 'name')) {
-                        nameRowIndex = r;
-                        break;
-                    }
-                }
-                if (nameRowIndex !== -1) break;
+    try {
+        const response = await fetch(`${API_BASE}/upload`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            let message = '成绩上传成功！共上传 ' + result.recordCount + ' 条记录';
+            if (result.invalidCount > 0) {
+                message += '，跳过 ' + result.invalidCount + ' 条无效记录';
             }
             
-            if (nameRowIndex === -1) {
-                showMessage(uploadStatus, '未找到包含"姓名"标题的行', false);
-                return;
-            }
+            showMessage(uploadStatus, message, true);
             
-            const headers = [];
-            for (let c = range.s.c; c <= range.e.c; c++) {
-                const cellAddress = XLSX.utils.encode_cell({r: nameRowIndex, c});
-                const cell = worksheet[cellAddress];
-                headers.push(cell ? cell.v : '');
-            }
-            
-            const processedHeaders = [];
-            
-            for (let c = range.s.c; c <= range.e.c; c++) {
-                const cellAddress = XLSX.utils.encode_cell({r: nameRowIndex, c});
-                const cell = worksheet[cellAddress];
-                let header = cell ? cell.v : '';
+            setTimeout(() => {
+                const overlay = document.getElementById('admin-overlay');
+                if (overlay) overlay.remove();
+                document.getElementById('admin-panel').style.display = 'none';
                 
-                if (header === '排名') {
-                    let subjectName = '';
-                    for (let i = c - 1; i >= range.s.c; i--) {
-                        const prevHeader = headers[i - range.s.c];
-                        if (prevHeader && prevHeader !== '排名') {
-                            subjectName = prevHeader;
-                            break;
-                        }
-                    }
-                    if (subjectName) {
-                        header = subjectName + '排名';
-                    } else {
-                        header = '排名';
-                    }
-                }
-                
-                processedHeaders.push(header);
-            }
-            
-            const jsonData = [];
-            for (let r = nameRowIndex + 1; r <= range.e.r; r++) {
-                const rowData = {};
-                let hasData = false;
-                
-                for (let c = range.s.c; c <= range.e.c; c++) {
-                    const cellAddress = XLSX.utils.encode_cell({r, c});
-                    const cell = worksheet[cellAddress];
-                    const header = processedHeaders[c - range.s.c];
-                    
-                    if (header) {
-                        rowData[header] = cell ? cell.v : '';
-                        if (cell && cell.v) hasData = true;
-                    }
-                }
-                
-                if (hasData) {
-                    jsonData.push(rowData);
-                }
-            }
-            
-            if (jsonData.length === 0) {
-                showMessage(uploadStatus, '未找到有效数据行', false);
-                return;
-            }
-            
-            let validData = [];
-            let invalidCount = 0;
-            
-            jsonData.forEach((row, index) => {
-                if (!row.姓名 && !row.name) {
-                    invalidCount++;
-                    return;
-                }
-                
-                if ((row.学号 || row.id || row.studentId) === undefined) {
-                    invalidCount++;
-                    return;
-                }
-                
-                validData.push(row);
-            });
-            
-            if (validData.length === 0) {
-                showMessage(uploadStatus, '所有数据行均无效', false);
-                return;
-            }
-            
-            const response = await fetch(`${API_BASE}/upload`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    examName,
-                    grades: validData,
-                    originalFilename
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (response.ok) {
-                let message = '成绩上传成功！共上传 ' + result.recordCount + ' 条记录';
-                if (result.invalidCount > 0) {
-                    message += '，跳过 ' + result.invalidCount + ' 条无效记录';
-                }
-                
-                showMessage(uploadStatus, message, true);
+                const mainContainer = document.querySelector('.container');
+                const successAlert = document.createElement('div');
+                successAlert.className = 'success global-alert';
+                successAlert.textContent = message;
+                mainContainer.insertBefore(successAlert, mainContainer.firstChild);
                 
                 setTimeout(() => {
-                    document.getElementById('admin-panel').style.display = 'none';
-                    
-                    const mainContainer = document.querySelector('.container');
-                    const successAlert = document.createElement('div');
-                    successAlert.className = 'success global-alert';
-                    successAlert.textContent = message;
-                    mainContainer.insertBefore(successAlert, mainContainer.firstChild);
-                    
-                    setTimeout(() => {
-                        successAlert.remove();
-                    }, 3000);
-                }, 2000);
-                
-                fileInput.value = '';
-            } else {
-                showMessage(uploadStatus, result.error || '上传失败', false);
-            }
-        } catch (error) {
-            showMessage(uploadStatus, '文件解析失败：' + error.message, false);
+                    successAlert.remove();
+                }, 3000);
+            }, 2000);
+            
+            fileInput.value = '';
+        } else {
+            showMessage(uploadStatus, result.error || '上传失败', false);
         }
-    };
-    
-    reader.onerror = function() {
-        showMessage(uploadStatus, '文件读取失败', false);
-    };
-    
-    reader.readAsArrayBuffer(file);
+    } catch (error) {
+        showMessage(uploadStatus, '上传失败：' + error.message, false);
+    }
 }
 
 async function queryGrade() {
