@@ -16,6 +16,8 @@
     "compression": "^1.7.4",
     "sequelize": "^6.35.1",
     "sqlite3": "^5.1.6",
+    "pg": "^8.11.3",
+    "pg-hstore": "^2.3.4",
     "jsonwebtoken": "^9.0.2"
   }
 }

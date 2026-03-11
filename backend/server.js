@@ -77,21 +77,28 @@ app.use((req, res, next) => {
     }
 });
 
-const dbPath = NODE_ENV === 'production' 
-    ? path.join(__dirname, 'data', 'grade_management.db')
-    : path.join(__dirname, 'grade_management.db');
+let sequelize;
 
-const fs = require('fs');
-const dataDir = path.join(__dirname, 'data');
-if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
+if (NODE_ENV === 'production' && process.env.DATABASE_URL) {
+    sequelize = new Sequelize(process.env.DATABASE_URL, {
+        dialect: 'postgres',
+        protocol: 'postgres',
+        dialectOptions: {
+            ssl: {
+                require: true,
+                rejectUnauthorized: false
+            }
+        },
+        logging: false
+    });
+} else {
+    const dbPath = path.join(__dirname, 'grade_management.db');
+    sequelize = new Sequelize({
+        dialect: 'sqlite',
+        storage: dbPath,
+        logging: false
+    });
 }
-
-const sequelize = new Sequelize({
-    dialect: 'sqlite',
-    storage: dbPath,
-    logging: false
-});
 
 const User = sequelize.define('User', {
     username: {
