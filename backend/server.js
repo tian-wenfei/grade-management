@@ -8,60 +8,56 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-const MAX_CONCURRENT_REQUESTS = parseInt(process.env.MAX_CONCURRENT) || 200;
-const RATE_LIMIT_PER_MINUTE = parseInt(process.env.RATE_LIMIT) || 60;
-let currentRequests = 0;
+const MAX_CONCURRENT_REQUESTS = parseInt(process.env.MAX_CONCURRENT) || 100;
+const MAX_REQUESTS_PER_MINUTE = parseInt(process.env.MAX_REQUESTS_PER_MINUTE) || 60;
+
+let activeRequests = 0;
 const requestCounts = new Map();
 const requestQueue = [];
 
-function rateLimiter(req, res, next) {
+setInterval(() => {
+    requestCounts.clear();
+}, 60000);
+
+const rateLimiter = (req, res, next) => {
     const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
-    const now = Date.now();
-    const windowMs = 60000;
     
     if (!requestCounts.has(clientIP)) {
-        requestCounts.set(clientIP, { count: 1, resetTime: now + windowMs });
-    } else {
-        const clientData = requestCounts.get(clientIP);
-        if (now > clientData.resetTime) {
-            clientData.count = 1;
-            clientData.resetTime = now + windowMs;
-        } else {
-            clientData.count++;
-        }
+        requestCounts.set(clientIP, 0);
     }
     
-    if (requestCounts.get(clientIP).count > RATE_LIMIT_PER_MINUTE) {
+    const clientRequests = requestCounts.get(clientIP);
+    
+    if (clientRequests >= MAX_REQUESTS_PER_MINUTE) {
         return res.status(429).json({
             error: '请求过于频繁，请稍后再试',
-            retryAfter: Math.ceil((requestCounts.get(clientIP).resetTime - now) / 1000)
+            retryAfter: 60
         });
     }
     
-    if (currentRequests >= MAX_CONCURRENT_REQUESTS) {
+    requestCounts.set(clientIP, clientRequests + 1);
+    
+    if (activeRequests >= MAX_CONCURRENT_REQUESTS) {
         return res.status(503).json({
             error: '当前访问人数较多，请稍后再试',
-            currentUsers: currentRequests,
-            maxUsers: MAX_CONCURRENT_REQUESTS
+            currentLoad: activeRequests,
+            maxLoad: MAX_CONCURRENT_REQUESTS,
+            retryAfter: 10
         });
     }
     
-    currentRequests++;
+    activeRequests++;
+    
     res.on('finish', () => {
-        currentRequests--;
+        activeRequests--;
+    });
+    
+    res.on('close', () => {
+        activeRequests--;
     });
     
     next();
-}
-
-setInterval(() => {
-    const now = Date.now();
-    for (const [ip, data] of requestCounts.entries()) {
-        if (now > data.resetTime) {
-            requestCounts.delete(ip);
-        }
-    }
-}, 60000);
+};
 
 const corsOptions = {
     origin: NODE_ENV === 'production' ? process.env.CORS_ORIGIN || '*' : '*',
@@ -74,10 +70,11 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 app.use((req, res, next) => {
-    if (req.path.startsWith('/api/health') || req.path === '/' || req.path.match(/\.(css|js|png|jpg|ico|html)$/)) {
-        return next();
+    if (req.path.startsWith('/api/')) {
+        rateLimiter(req, res, next);
+    } else {
+        next();
     }
-    rateLimiter(req, res, next);
 });
 
 const dbPath = NODE_ENV === 'production' 
@@ -567,9 +564,20 @@ app.get('/api/health', (req, res) => {
     res.json({ 
         status: 'ok', 
         timestamp: new Date(),
-        currentUsers: currentRequests,
-        maxUsers: MAX_CONCURRENT_REQUESTS,
-        loadPercent: Math.round((currentRequests / MAX_CONCURRENT_REQUESTS) * 100)
+        activeRequests,
+        maxConcurrent: MAX_CONCURRENT_REQUESTS,
+        loadPercentage: Math.round((activeRequests / MAX_CONCURRENT_REQUESTS) * 100)
+    });
+});
+
+app.get('/api/status', (req, res) => {
+    const loadPercentage = Math.round((activeRequests / MAX_CONCURRENT_REQUESTS) * 100);
+    res.json({
+        activeRequests,
+        maxConcurrent: MAX_CONCURRENT_REQUESTS,
+        loadPercentage,
+        status: loadPercentage > 80 ? 'busy' : loadPercentage > 50 ? 'moderate' : 'normal',
+        message: loadPercentage > 80 ? '当前访问人数较多' : '系统运行正常'
     });
 });
 

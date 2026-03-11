@@ -1,43 +1,38 @@
 const API_BASE = window.location.origin + '/api';
 
-function showBusyMessage(data) {
-    let overlay = document.getElementById('busy-overlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'busy-overlay';
-        overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.7);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-        `;
-        document.body.appendChild(overlay);
-    }
+function showRateLimitMessage(error, retryAfter) {
+    const existing = document.getElementById('rate-limit-modal');
+    if (existing) existing.remove();
     
-    overlay.innerHTML = `
+    const modal = document.createElement('div');
+    modal.id = 'rate-limit-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+    `;
+    
+    modal.innerHTML = `
         <div style="
             background: white;
-            padding: 40px 60px;
+            padding: 40px;
             border-radius: 16px;
             text-align: center;
             max-width: 400px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         ">
-            <div style="font-size: 48px; margin-bottom: 20px;">⏳</div>
-            <h3 style="color: #333; margin-bottom: 15px;">${data.error || '当前访问人数较多'}</h3>
-            <p style="color: #666; margin-bottom: 20px;">
-                当前在线: ${data.currentUsers || '?'}/${data.maxUsers || '?'} 人
-            </p>
-            <p style="color: #999; font-size: 14px;">
-                请稍后再试，感谢您的理解
-            </p>
-            <button onclick="document.getElementById('busy-overlay').remove()" style="
+            <div style="font-size: 60px; margin-bottom: 20px;">⏳</div>
+            <h3 style="color: #f44336; margin-bottom: 15px;">访问繁忙</h3>
+            <p style="color: #666; margin-bottom: 20px; line-height: 1.6;">${error}</p>
+            <p style="color: #999; font-size: 14px;">请等待 <span id="retry-countdown">${retryAfter || 10}</span> 秒后重试</p>
+            <button onclick="this.parentElement.parentElement.remove()" style="
                 margin-top: 20px;
                 padding: 12px 30px;
                 background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
@@ -46,36 +41,42 @@ function showBusyMessage(data) {
                 border-radius: 8px;
                 cursor: pointer;
                 font-size: 14px;
-            ">确定</button>
+            ">关闭</button>
         </div>
     `;
-    overlay.style.display = 'flex';
+    
+    document.body.appendChild(modal);
+    
+    const countdown = document.getElementById('retry-countdown');
+    let seconds = parseInt(retryAfter) || 10;
+    const timer = setInterval(() => {
+        seconds--;
+        if (countdown) countdown.textContent = seconds;
+        if (seconds <= 0) {
+            clearInterval(timer);
+            modal.remove();
+        }
+    }, 1000);
 }
 
-async function fetchWithLimit(url, options = {}) {
+async function fetchWithRateLimit(url, options = {}) {
     try {
         const response = await fetch(url, options);
         
         if (response.status === 429) {
             const data = await response.json();
-            showBusyMessage({
-                error: data.error || '请求过于频繁',
-                retryAfter: data.retryAfter
-            });
-            throw new Error('RATE_LIMIT');
+            showRateLimitMessage(data.error, data.retryAfter);
+            throw new Error(data.error);
         }
         
         if (response.status === 503) {
             const data = await response.json();
-            showBusyMessage(data);
-            throw new Error('SERVER_BUSY');
+            showRateLimitMessage(data.error, data.retryAfter);
+            throw new Error(data.error);
         }
         
         return response;
     } catch (error) {
-        if (error.message === 'RATE_LIMIT' || error.message === 'SERVER_BUSY') {
-            throw error;
-        }
         throw error;
     }
 }
@@ -124,7 +125,7 @@ async function checkUserLoginStatus() {
     
     if (token && username) {
         try {
-            const response = await fetchWithLimit(`${API_BASE}/user`, {
+            const response = await fetchWithRateLimit(`${API_BASE}/user`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -181,7 +182,7 @@ async function createUser() {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/admin/users`, {
+        const response = await fetchWithRateLimit(`${API_BASE}/admin/users`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -220,7 +221,7 @@ async function userLogin() {
     }
     
     try {
-        const response = await fetchWithLimit(`${API_BASE}/login`, {
+        const response = await fetchWithRateLimit(`${API_BASE}/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -295,7 +296,7 @@ async function loadUsers() {
     if (!token) return;
     
     try {
-        const response = await fetch(`${API_BASE}/admin/users`, {
+        const response = await fetchWithRateLimit(`${API_BASE}/admin/users`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -331,7 +332,7 @@ async function deleteUser(userId) {
     const token = localStorage.getItem('token');
     
     try {
-        const response = await fetch(`${API_BASE}/admin/users/${userId}`, {
+        const response = await fetchWithRateLimit(`${API_BASE}/admin/users/${userId}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -355,7 +356,7 @@ async function loadExams() {
     if (!token) return;
     
     try {
-        const response = await fetch(`${API_BASE}/exams`, {
+        const response = await fetchWithRateLimit(`${API_BASE}/exams`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -391,7 +392,7 @@ async function deleteExam(examId) {
     const token = localStorage.getItem('token');
     
     try {
-        const response = await fetch(`${API_BASE}/admin/exams/${examId}`, {
+        const response = await fetchWithRateLimit(`${API_BASE}/admin/exams/${examId}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -426,7 +427,7 @@ async function changeUsername() {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/user/username`, {
+        const response = await fetchWithRateLimit(`${API_BASE}/user/username`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -469,7 +470,7 @@ async function changePassword() {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/user/password`, {
+        const response = await fetchWithRateLimit(`${API_BASE}/user/password`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -640,7 +641,7 @@ async function uploadExcel() {
                 return;
             }
             
-            const response = await fetchWithLimit(`${API_BASE}/upload`, {
+            const response = await fetchWithRateLimit(`${API_BASE}/upload`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -709,7 +710,7 @@ async function queryGrade() {
     }
     
     try {
-        const response = await fetchWithLimit(
+        const response = await fetchWithRateLimit(
             `${API_BASE}/grades?studentName=${encodeURIComponent(studentName)}&studentId=${encodeURIComponent(studentId)}`
         );
         
