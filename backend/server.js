@@ -529,8 +529,8 @@ async function initDatabase() {
     }
 }
 
-app.listen(PORT, async () => {
-    console.log(`服务器运行在 http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', async () => {
+    console.log(`服务器运行在 http://0.0.0.0:${PORT}`);
     await initDatabase();
 });
 
