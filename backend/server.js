@@ -615,9 +615,16 @@ async function initDatabase() {
     }
 }
 
-app.listen(PORT, async () => {
-    console.log(`服务器运行在 http://localhost:${PORT}`);
-    await initDatabase();
+app.listen(PORT, '0.0.0.0', async () => {
+    console.log(`服务器运行在端口 ${PORT}`);
+    console.log(`NODE_ENV: ${NODE_ENV}`);
+    try {
+        await initDatabase();
+        console.log('服务启动成功');
+    } catch (error) {
+        console.error('服务启动失败:', error);
+        process.exit(1);
+    }
 });
 
 module.exports = app;
