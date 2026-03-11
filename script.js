@@ -495,6 +495,10 @@ function renderExams() {
         exam.uploader.toLowerCase().includes(searchValue)
     );
     
+    const sortedExams = [...filteredExams].sort((a, b) => 
+        new Date(a.createdAt) - new Date(b.createdAt)
+    );
+    
     const totalPages = Math.ceil(filteredExams.length / pageSize);
     const startIndex = (currentExamPage - 1) * pageSize;
     const endIndex = startIndex + pageSize;
@@ -507,9 +511,10 @@ function renderExams() {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:30px;">暂无数据</td></tr>';
     } else {
         pageExams.forEach((exam, index) => {
+            const sortedIndex = sortedExams.findIndex(e => e.id === exam.id) + 1;
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${startIndex + index + 1}</td>
+                <td>${sortedIndex}</td>
                 <td>${exam.examName}</td>
                 <td>${exam.uploader}</td>
                 <td>${new Date(exam.createdAt).toLocaleString('zh-CN')}</td>
