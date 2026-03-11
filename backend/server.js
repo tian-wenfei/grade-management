@@ -2,10 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { Sequelize, DataTypes } = require('sequelize');
+const compression = require('compression');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// 启用 Gzip 压缩
+app.use(compression());
 
 const corsOptions = {
     origin: NODE_ENV === 'production' ? process.env.CORS_ORIGIN || '*' : '*',
@@ -15,6 +19,11 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// 静态文件缓存
+app.use(express.static(path.join(__dirname, '..'), {
+    maxAge: NODE_ENV === 'production' ? '1d' : '0'
+}));
 
 const dbPath = NODE_ENV === 'production' 
     ? path.join(__dirname, 'data', 'grade_management.db')
