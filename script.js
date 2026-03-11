@@ -346,7 +346,7 @@ function renderUsers() {
     if (pageUsers.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:30px;">暂无数据</td></tr>';
     } else {
-        pageUsers.forEach(user => {
+        pageUsers.forEach((user, index) => {
             const roleMap = {
                 'superadmin': '超级管理员',
                 'admin': '管理员',
@@ -354,7 +354,7 @@ function renderUsers() {
             };
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${user.id}</td>
+                <td>${startIndex + index + 1}</td>
                 <td>${user.username}</td>
                 <td>${roleMap[user.role] || user.role}</td>
                 <td>${new Date(user.createdAt).toLocaleString('zh-CN')}</td>
@@ -506,10 +506,10 @@ function renderExams() {
     if (pageExams.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:30px;">暂无数据</td></tr>';
     } else {
-        pageExams.forEach(exam => {
+        pageExams.forEach((exam, index) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${exam.id}</td>
+                <td>${startIndex + index + 1}</td>
                 <td>${exam.examName}</td>
                 <td>${exam.uploader}</td>
                 <td>${new Date(exam.createdAt).toLocaleString('zh-CN')}</td>
