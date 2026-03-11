@@ -546,7 +546,7 @@ app.get('/api/exams', async (req, res) => {
     try {
         const exams = await Exam.findAll({
             attributes: ['id', 'examName', 'uploader', 'createdAt'],
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'ASC']]
         });
         res.json(exams);
     } catch (error) {
