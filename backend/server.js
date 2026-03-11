@@ -586,7 +586,7 @@ app.get('/api/admin/users', authenticateToken, async (req, res) => {
         const users = await User.findAll({
             attributes: ['id', 'username', 'role', 'createdBy', 'createdAt'],
             where: whereClause,
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'ASC']]
         });
         res.json(users);
     } catch (error) {
