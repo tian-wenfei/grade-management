@@ -2,8 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { Sequelize, DataTypes } = require('sequelize');
-const multer = require('multer');
-const XLSX = require('xlsx');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -17,11 +15,6 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-const upload = multer({ 
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 10 * 1024 * 1024 }
-});
 
 const dbPath = NODE_ENV === 'production' 
     ? path.join(__dirname, 'data', 'grade_management.db')
@@ -284,92 +277,13 @@ app.put('/api/user/username', authenticateToken, async (req, res) => {
     }
 });
 
-app.post('/api/upload', authenticateToken, upload.single('excelFile'), async (req, res) => {
+app.post('/api/upload', authenticateToken, async (req, res) => {
     try {
+        const { examName, grades, originalFilename } = req.body;
         const username = req.user.username;
         
-        if (!req.file) {
-            return res.status(400).json({ error: '请选择Excel文件' });
-        }
-        
-        const originalFilename = req.file.originalname;
-        const examName = originalFilename.substring(0, originalFilename.lastIndexOf('.')) || originalFilename;
-        
-        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        
-        const range = XLSX.utils.decode_range(worksheet['!ref']);
-        let nameRowIndex = -1;
-        
-        for (let r = range.s.r; r <= range.e.r; r++) {
-            for (let c = range.s.c; c <= range.e.c; c++) {
-                const cellAddress = XLSX.utils.encode_cell({r, c});
-                const cell = worksheet[cellAddress];
-                if (cell && (cell.v === '姓名' || cell.v === 'name')) {
-                    nameRowIndex = r;
-                    break;
-                }
-            }
-            if (nameRowIndex !== -1) break;
-        }
-        
-        if (nameRowIndex === -1) {
-            return res.status(400).json({ error: '未找到包含"姓名"标题的行' });
-        }
-        
-        const headers = [];
-        for (let c = range.s.c; c <= range.e.c; c++) {
-            const cellAddress = XLSX.utils.encode_cell({r: nameRowIndex, c});
-            const cell = worksheet[cellAddress];
-            headers.push(cell ? cell.v : '');
-        }
-        
-        const processedHeaders = [];
-        for (let c = range.s.c; c <= range.e.c; c++) {
-            const cellAddress = XLSX.utils.encode_cell({r: nameRowIndex, c});
-            const cell = worksheet[cellAddress];
-            let header = cell ? cell.v : '';
-            
-            if (header === '排名') {
-                let subjectName = '';
-                for (let i = c - 1; i >= range.s.c; i--) {
-                    const prevHeader = headers[i - range.s.c];
-                    if (prevHeader && prevHeader !== '排名') {
-                        subjectName = prevHeader;
-                        break;
-                    }
-                }
-                if (subjectName) {
-                    header = subjectName + '排名';
-                }
-            }
-            processedHeaders.push(header);
-        }
-        
-        const jsonData = [];
-        for (let r = nameRowIndex + 1; r <= range.e.r; r++) {
-            const rowData = {};
-            let hasData = false;
-            
-            for (let c = range.s.c; c <= range.e.c; c++) {
-                const cellAddress = XLSX.utils.encode_cell({r, c});
-                const cell = worksheet[cellAddress];
-                const header = processedHeaders[c - range.s.c];
-                
-                if (header) {
-                    rowData[header] = cell ? cell.v : '';
-                    if (cell && cell.v) hasData = true;
-                }
-            }
-            
-            if (hasData) {
-                jsonData.push(rowData);
-            }
-        }
-        
-        if (jsonData.length === 0) {
-            return res.status(400).json({ error: '未找到有效数据行' });
+        if (!examName || !grades || !Array.isArray(grades)) {
+            return res.status(400).json({ error: '请提供考试名称和成绩数据' });
         }
         
         let exam = await Exam.findOne({ where: { examName } });
@@ -389,7 +303,7 @@ app.post('/api/upload', authenticateToken, upload.single('excelFile'), async (re
         const validGrades = [];
         let invalidCount = 0;
         
-        for (const grade of jsonData) {
+        for (const grade of grades) {
             if (!grade.姓名 && !grade.name) {
                 invalidCount++;
                 continue;
@@ -615,16 +529,9 @@ async function initDatabase() {
     }
 }
 
-app.listen(PORT, '0.0.0.0', async () => {
-    console.log(`服务器运行在端口 ${PORT}`);
-    console.log(`NODE_ENV: ${NODE_ENV}`);
-    try {
-        await initDatabase();
-        console.log('服务启动成功');
-    } catch (error) {
-        console.error('服务启动失败:', error);
-        process.exit(1);
-    }
+app.listen(PORT, async () => {
+    console.log(`服务器运行在 http://localhost:${PORT}`);
+    await initDatabase();
 });
 
 module.exports = app;
