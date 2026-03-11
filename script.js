@@ -808,6 +808,9 @@ async function uploadExcel() {
                 setTimeout(() => {
                     document.getElementById('admin-panel').style.display = 'none';
                     
+                    const overlay = document.getElementById('admin-overlay');
+                    if (overlay) overlay.remove();
+                    
                     const mainContainer = document.querySelector('.container');
                     const successAlert = document.createElement('div');
                     successAlert.className = 'success global-alert';
