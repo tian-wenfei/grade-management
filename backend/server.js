@@ -113,6 +113,10 @@ const User = sequelize.define('User', {
     role: {
         type: DataTypes.STRING,
         defaultValue: 'user'
+    },
+    createdBy: {
+        type: DataTypes.INTEGER,
+        allowNull: true
     }
 });
 
@@ -248,7 +252,7 @@ app.post('/api/login', async (req, res) => {
 
 app.post('/api/admin/users', authenticateToken, async (req, res) => {
     try {
-        if (req.user.role !== 'admin') {
+        if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
             return res.status(403).json({ error: '权限不足' });
         }
         
@@ -263,10 +267,19 @@ app.post('/api/admin/users', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: '用户名已存在' });
         }
         
+        if (req.user.role === 'superadmin' && role === 'superadmin') {
+            return res.status(400).json({ error: '不能创建超级管理员' });
+        }
+        
+        if (req.user.role === 'admin' && role === 'admin') {
+            return res.status(400).json({ error: '管理员只能创建普通用户' });
+        }
+        
         const user = await User.create({
             username,
             password,
-            role: role || 'user'
+            role: role || 'user',
+            createdBy: req.user.id
         });
         
         res.json({
@@ -493,11 +506,24 @@ app.get('/api/logs', authenticateToken, async (req, res) => {
 
 app.get('/api/admin/users', authenticateToken, async (req, res) => {
     try {
-        if (req.user.role !== 'admin') {
+        if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
             return res.status(403).json({ error: '权限不足' });
         }
+        
+        let whereClause = {};
+        
+        if (req.user.role === 'superadmin') {
+            whereClause = {};
+        } else if (req.user.role === 'admin') {
+            whereClause = {
+                createdBy: req.user.id,
+                role: 'user'
+            };
+        }
+        
         const users = await User.findAll({
-            attributes: ['id', 'username', 'role', 'createdAt'],
+            attributes: ['id', 'username', 'role', 'createdBy', 'createdAt'],
+            where: whereClause,
             order: [['createdAt', 'DESC']]
         });
         res.json(users);
@@ -508,13 +534,34 @@ app.get('/api/admin/users', authenticateToken, async (req, res) => {
 
 app.delete('/api/admin/users/:id', authenticateToken, async (req, res) => {
     try {
-        if (req.user.role !== 'admin') {
+        if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
             return res.status(403).json({ error: '权限不足' });
         }
+        
         const userId = parseInt(req.params.id);
+        
         if (userId === req.user.id) {
             return res.status(400).json({ error: '不能删除当前登录用户' });
         }
+        
+        const targetUser = await User.findByPk(userId);
+        if (!targetUser) {
+            return res.status(404).json({ error: '用户不存在' });
+        }
+        
+        if (req.user.role === 'admin') {
+            if (targetUser.role !== 'user') {
+                return res.status(403).json({ error: '只能删除普通用户' });
+            }
+            if (targetUser.createdBy !== req.user.id) {
+                return res.status(403).json({ error: '只能删除自己创建的用户' });
+            }
+        }
+        
+        if (req.user.role === 'superadmin' && targetUser.role === 'superadmin') {
+            return res.status(400).json({ error: '不能删除超级管理员' });
+        }
+        
         await User.destroy({ where: { id: userId } });
         res.json({ message: '用户删除成功' });
     } catch (error) {
@@ -600,12 +647,24 @@ async function initDatabase() {
         await sequelize.sync(syncOptions);
         console.log('数据库同步完成');
         
+        const superAdmin = await User.findOne({ where: { username: '西街中学' } });
+        if (!superAdmin) {
+            await User.create({
+                username: '西街中学',
+                password: 'xjzx2026',
+                role: 'superadmin',
+                createdBy: null
+            });
+            console.log('超级管理员账户已创建: 西街中学 / xjzx2026');
+        }
+        
         const adminUser = await User.findOne({ where: { username: 'admin' } });
         if (!adminUser) {
             await User.create({
                 username: 'admin',
                 password: '123456',
-                role: 'admin'
+                role: 'admin',
+                createdBy: null
             });
             console.log('默认管理员账户已创建: admin / 123456');
         }

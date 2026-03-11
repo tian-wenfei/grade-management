@@ -136,10 +136,16 @@ async function checkUserLoginStatus() {
                 document.getElementById('upload-section').style.display = 'flex';
                 document.getElementById('currentUser').textContent = username;
                 
-                if (userRole === 'admin') {
+                if (userRole === 'admin' || userRole === 'superadmin') {
                     document.getElementById('manageUsersBtn').style.display = 'inline-block';
                     document.getElementById('manageExamsBtn').style.display = 'inline-block';
                 }
+                
+                const adminOption = document.getElementById('adminOption');
+                if (userRole === 'superadmin' && adminOption) {
+                    adminOption.style.display = 'block';
+                }
+                
                 return;
             }
         } catch (error) {
@@ -308,11 +314,16 @@ async function loadUsers() {
             tbody.innerHTML = '';
             
             users.forEach(user => {
+                const roleMap = {
+                    'superadmin': '超级管理员',
+                    'admin': '管理员',
+                    'user': '普通用户'
+                };
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${user.id}</td>
                     <td>${user.username}</td>
-                    <td>${user.role === 'admin' ? '管理员' : '用户'}</td>
+                    <td>${roleMap[user.role] || user.role}</td>
                     <td>${new Date(user.createdAt).toLocaleString('zh-CN')}</td>
                     <td>
                         <button class="action-btn delete-btn" onclick="deleteUser(${user.id})">删除</button>
