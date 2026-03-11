@@ -571,7 +571,7 @@ app.delete('/api/admin/users/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/admin/exams/:id', authenticateToken, async (req, res) => {
     try {
-        if (req.user.role !== 'admin') {
+        if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
             return res.status(403).json({ error: '权限不足' });
         }
         const examId = parseInt(req.params.id);
@@ -585,7 +585,7 @@ app.delete('/api/admin/exams/:id', authenticateToken, async (req, res) => {
 
 app.get('/api/admin/grades', authenticateToken, async (req, res) => {
     try {
-        if (req.user.role !== 'admin') {
+        if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
             return res.status(403).json({ error: '权限不足' });
         }
         const examId = req.query.examId;
