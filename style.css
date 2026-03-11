@@ -428,6 +428,20 @@ tr:hover {
     border-radius: 6px;
 }
 
+.footer {
+    text-align: center;
+    padding: 30px 20px;
+    margin-top: 40px;
+    border-top: 1px solid #e0e0e0;
+    color: #666;
+    font-size: 14px;
+    line-height: 1.8;
+}
+
+.footer p {
+    margin: 5px 0;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
     .container {
